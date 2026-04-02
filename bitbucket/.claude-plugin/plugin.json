@@ -1,0 +1,8 @@
+{
+  "name": "bitbucket",
+  "version": "0.1.0",
+  "description": "Interact with Bitbucket Cloud via its REST API v2.0. Covers PR management, code review, repo operations, pipelines, and branch workflows.",
+  "author": {
+    "name": "AnhQuanTrl"
+  }
+}
