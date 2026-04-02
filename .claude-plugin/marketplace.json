@@ -2,6 +2,9 @@
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "skill-hub",
   "description": "A collection of skills made by AnhQuanTrl",
+  "owner": {
+    "name": "AnhQuanTrl"
+  },
   "plugins": [
     {
       "name": "bitbucket",
