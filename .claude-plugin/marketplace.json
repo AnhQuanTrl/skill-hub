@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "skill-hub",
+  "description": "A collection of skills made by AnhQuanTrl",
+  "plugins": [
+    {
+      "name": "bitbucket",
+      "description": "Interact with Bitbucket Cloud via its REST API v2.0. Covers PR management, code review, repo operations, pipelines, and branch workflows.",
+      "source": "./bitbucket",
+      "version": "0.1.0",
+      "category": "development"
+    }
+  ]
+}

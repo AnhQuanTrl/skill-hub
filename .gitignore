@@ -1,0 +1,9 @@
+# Eval run outputs (iteration results, grading, benchmarks, timing)
+*-workspace/iteration-*/
+
+# OS files
+.DS_Store
+
+# Temp files
+*.tmp
+/tmp/

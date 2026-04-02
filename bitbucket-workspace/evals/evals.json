@@ -1,0 +1,29 @@
+{
+  "skill_name": "bitbucket",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Show me all open PRs targeting the main branch in drovacorp/interface on bitbucket, I want to see who authored each one and when it was last updated",
+      "expected_output": "A curl command that lists PRs with state=OPEN filter on destination.branch.name=main, parsed with jq to show title, author, and updated_on",
+      "files": []
+    },
+    {
+      "id": 1,
+      "prompt": "Create a pull request from feature/auth-refactor to develop in drovacorp/interface on bitbucket. Add a description about the OAuth2 migration changes and assign reviewer john.doe",
+      "expected_output": "A curl POST to the pullrequests endpoint with correct JSON body including source branch, destination branch, title, description, and reviewer. Should look up john.doe's account_id first.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "PR #87 in drovacorp/interface on bitbucket looks good — approve it and then squash merge it",
+      "expected_output": "Two curl commands: first a POST to approve endpoint, then a POST to merge endpoint with merge_strategy=squash",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Review the code changes in PR #123 in drovacorp/interface on bitbucket. It's a big refactor so there might be a lot of files changed. Check the diff and leave comments on anything that looks off.",
+      "expected_output": "Should use a diffstat-first approach: get diffstat for overview, save full diff to temp file, navigate file-by-file using grep to find boundaries and Read to inspect sections, then post inline comments.",
+      "files": []
+    }
+  ]
+}
