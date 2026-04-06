@@ -1,0 +1,82 @@
+{
+  "skill_name": "code-review",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Review PR #42 in our repo. Here's the diff:\n\n```diff\n--- a/src/auth.ts\n+++ b/src/auth.ts\n@@ -15,6 +15,9 @@\n async function authenticate(req: Request) {\n   const token = req.headers.authorization;\n-  if (!token) throw new UnauthorizedError();\n+  if (!token) return null;\n   const user = await verifyToken(token);\n   return user;\n }\n```\n\nThe PR description says: 'Fix auth to handle missing tokens gracefully'",
+      "expected_output": "Should flag the silent failure: returning null instead of throwing removes auth enforcement. Callers expecting a User object will get null. This is a Tier 1 correctness/security issue (auth loosening). Should NOT just say 'looks good' because the description says 'graceful handling'.",
+      "expectations": [
+        "Identifies returning null as a security or correctness issue, not just a style preference",
+        "Explains that callers expecting a User object will receive null, causing downstream failures or auth bypass",
+        "Classifies this as a must-fix or blocking issue, not a suggestion",
+        "Does not accept the change just because the PR description frames it as graceful handling"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Review this PR. The diff touches 4 files:\n\n```diff\n--- a/src/utils/format.ts\n+++ b/src/utils/format.ts\n@@ -1,5 +1,5 @@\n-export function formatDate(d: Date): string {\n+export function formatTimestamp(d: Date): string {\n   return d.toISOString();\n }\n```\n\n```diff\n--- a/src/components/Header.tsx\n+++ b/src/components/Header.tsx\n@@ -8,7 +8,7 @@\n-import { formatDate } from '../utils/format';\n+import { formatTimestamp } from '../utils/format';\n ...\n-  <span>{formatDate(post.createdAt)}</span>\n+  <span>{formatTimestamp(post.createdAt)}</span>\n```\n\n```diff\n--- a/src/api/posts.ts\n+++ b/src/api/posts.ts\n@@ -22,7 +22,7 @@\n import { formatDate } from '../utils/format';\n ...\n-  return formatDate(post.publishedAt);\n+  return formatDate(post.publishedAt);\n```\n\nPR title: 'Rename formatDate to formatTimestamp'",
+      "expected_output": "Should catch the incomplete refactor: src/api/posts.ts still imports formatDate (old name) but the export was renamed to formatTimestamp. This will break at runtime. Should classify as Tier 1 breakage.",
+      "expectations": [
+        "Identifies that src/api/posts.ts still imports formatDate which no longer exists",
+        "Explains this will cause a runtime or compile error",
+        "Classifies this as a breakage or must-fix issue",
+        "Does not get distracted by the files that were correctly updated"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Review this PR:\n\n```diff\n--- a/src/services/payment.ts\n+++ b/src/services/payment.ts\n@@ -45,8 +45,12 @@\n async function processPayment(order: Order) {\n   const amount = order.total;\n+  try {\n     const result = await paymentGateway.charge(order.customerId, amount);\n     await db.orders.update(order.id, { status: 'paid', transactionId: result.id });\n     return { success: true, transactionId: result.id };\n+  } catch (e) {\n+    return { success: false };\n+  }\n }\n```\n\nPR description: 'Add error handling to payment processing'",
+      "expected_output": "Should flag the silent failure in the catch block: payment errors are swallowed with no logging, no error details returned, and no way for callers to know what went wrong. This is Tier 2 error handling. Should also note that the customer could be charged but the DB update could fail (partial state), and the catch swallows that too.",
+      "expectations": [
+        "Identifies the catch block as swallowing errors silently",
+        "Notes that no error details are logged or returned to callers",
+        "Flags the risk of partial state: charge succeeds but DB update fails, caught and hidden",
+        "Does not accept this as adequate error handling just because the PR says it adds error handling"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Review this PR. Here's the diff:\n\n```diff\n--- a/src/config.ts\n+++ b/src/config.ts\n@@ -1,6 +1,6 @@\n export const config = {\n   apiUrl: process.env.API_URL || 'http://localhost:3000',\n-  dbHost: process.env.DB_HOST || 'localhost',\n+  dbHost: process.env.DB_HOST || 'localhost',\n   logLevel: process.env.LOG_LEVEL || 'info',\n+  stripeKey: 'sk_live_abc123xyz789',\n };\n```",
+      "expected_output": "Should immediately flag the hardcoded Stripe live secret key as a Tier 1 security issue. Should recommend using an environment variable. Should NOT flag the unchanged dbHost line or the existing pattern of env vars — those are pre-existing.",
+      "expectations": [
+        "Flags the hardcoded Stripe secret key as a security issue",
+        "Classifies it as a critical or must-fix finding",
+        "Recommends using an environment variable instead",
+        "Does not flag the unchanged lines or pre-existing patterns as issues"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Review this PR:\n\n```diff\n--- a/src/components/UserList.tsx\n+++ b/src/components/UserList.tsx\n@@ -5,10 +5,10 @@\n function UserList({ users }: Props) {\n   return (\n     <div>\n-      {users.map(user => (\n-        <div key={user.id}>\n-          <span>{user.name}</span>\n+      {users.map((user) => (\n+        <div key={user.id}>\n+          <span>{user.name}</span>\n           <span>{user.email}</span>\n         </div>\n       ))}\n```\n\nPR title: 'Fix linting warnings in UserList component'",
+      "expected_output": "Should recognize this is purely formatting/style changes (arrow function parens, whitespace). Should approve with no issues — this is exactly the kind of thing the skill says NOT to flag (style and formatting, linters handle this).",
+      "expectations": [
+        "Recognizes the changes are purely stylistic or formatting",
+        "Does not flag any issues",
+        "Approves or states no issues found",
+        "Does not invent findings to justify the review"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "I just pushed some changes to my feature branch but haven't created a PR yet. Can you review what I've changed before I open the PR?",
+      "expected_output": "Should handle self-review mode: use local git to diff against base branch (git merge-base HEAD main), review locally, and report findings directly instead of posting API comments. Should not require a PR number or try to call any platform API.",
+      "expectations": [
+        "Uses local git commands to get the diff (git diff, git merge-base, not API calls)",
+        "Does not ask for or require a PR number",
+        "Reports findings directly to the user instead of posting comments via API",
+        "Still applies the same review criteria (tiers, philosophy) to the local diff"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Review PR #88. Here's the diff:\n\n```diff\n--- a/src/services/userService.ts\n+++ b/src/services/userService.ts\n@@ -10,6 +10,15 @@\n+async function deleteUser(userId: string) {\n+  const user = await db.users.findById(userId);\n+  await db.orders.deleteMany({ userId });\n+  await db.payments.deleteMany({ userId });\n+  await db.sessions.deleteMany({ userId });\n+  await db.users.delete(userId);\n+  await emailService.sendDeletionConfirmation(user.email);\n+  return { deleted: true };\n+}\n```\n\nPR title: 'Add user deletion endpoint'",
+      "expected_output": "Should flag multiple issues: no error handling for partial deletion (if orders delete but payments fail, data is inconsistent — should use a transaction), no null check on user (findById could return null, then user.email throws), and no test coverage for a destructive operation. Should NOT flag naming or style.",
+      "expectations": [
+        "Identifies the lack of transaction or atomicity for cascading deletes",
+        "Identifies that user could be null if findById returns nothing, causing user.email to throw",
+        "Flags missing error handling for the multi-step deletion sequence",
+        "Does not flag naming conventions or style issues"
+      ]
+    }
+  ]
+}

@@ -18,9 +18,11 @@ if [ -z "$BITBUCKET_USERNAME" ] || [ -z "$BITBUCKET_API_TOKEN" ]; then
 fi
 ```
 
-If missing, tell the user to create an API token at:
-Profile > Account Settings > Security > Create API token with scopes.
-Minimum scopes: Repositories (Read), Pull Requests (Read/Write). Add Pipelines (Read/Write) for pipeline operations.
+If missing, tell the user:
+
+> Create a Bitbucket API token at Profile > Account Settings > Security > Create API token with scopes.
+> Minimum scopes: Repositories (Read), Pull Requests (Read/Write). Add Pipelines (Read/Write) for pipeline operations.
+> App passwords are deprecated — use API tokens instead.
 
 ### 2. Identify workspace and repo
 
@@ -58,15 +60,10 @@ For pagination loops, filter operators, field names per resource, URL encoding p
 Endpoint documentation — consult when making specific API calls.
 
 - **`references/pullrequests.md`** — PR endpoints: list, create, update, merge, approve, decline, comment, diff, diffstat, and viewing file contents at specific commits. Use when performing any pull request operation.
+- **`references/repositories.md`** — Repository CRUD, source browsing (list directories, get file contents at any revision), file history, creating commits via file upload, downloads, forks, watchers, and workspace-wide code search. Use when managing repos or browsing/reading source code.
 
-Future: repositories & source browsing, pipelines, branches/tags/commits (see `TODO.md`).
+Future: pipelines, branches/tags/commits (see `TODO.md`).
 
 ### General Patterns
 
 - **`references/api-conventions.md`** — Pagination loops, filter query syntax and operators, field names per resource, URL encoding, sorting, and error response parsing. Use when you need to paginate through results, build complex filter queries, or handle errors beyond the basics in the conventions section above.
-
-### Workflows
-
-Step-by-step procedures that combine multiple API calls for a specific task.
-
-- **`references/code-review.md`** — How to efficiently review a PR's code changes: fetch metadata, assess diff scope, save diff to disk for repeated reference, navigate file-by-file, fetch full file contents for surrounding context, and leave inline comments. Use when the user asks to review, check, or look at code changes in a PR.

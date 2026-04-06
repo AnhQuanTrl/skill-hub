@@ -3,16 +3,9 @@
 ## Completed
 - [x] SKILL.md — core skill with auth, conventions, quick reference
 - [x] references/pullrequests.md — full PR operations reference
-
-## Planned Reference Files
-
-### references/repositories.md
-- [ ] List workspace repos (with filtering)
-- [ ] Get repo details
-- [ ] Create / delete repo
-- [ ] Browse source files at a revision (`/src/{commit}/{path}`)
-- [ ] Get raw file contents
-- [ ] Search code
+- [x] references/api-conventions.md — pagination, filtering, sorting, error handling
+- [x] references/code-review.md — PR code review workflow
+- [x] references/repositories.md — repo CRUD, source browsing, file history, downloads, forks, code search
 
 ### references/pipelines.md
 - [ ] Trigger pipeline (branch, custom pipeline, variables)

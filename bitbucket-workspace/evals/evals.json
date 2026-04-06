@@ -24,6 +24,18 @@
       "prompt": "Review the code changes in PR #123 in drovacorp/interface on bitbucket. It's a big refactor so there might be a lot of files changed. Check the diff and leave comments on anything that looks off.",
       "expected_output": "Should use a diffstat-first approach: get diffstat for overview, save full diff to temp file, navigate file-by-file using grep to find boundaries and Read to inspect sections, then post inline comments.",
       "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Can you quickly review PR #15 in drovacorp/interface on bitbucket? It's just a small bugfix, probably only a couple files changed.",
+      "expected_output": "Should fetch diffstat first to assess size, then fetch the full diff. For a small PR, no need for the heavy save-to-disk pattern.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "I want to list my open PRs on bitbucket but I haven't set up any credentials yet. How do I get started?",
+      "expected_output": "Should mention API tokens (not app passwords), point to Profile > Account Settings > Security, mention BITBUCKET_USERNAME and BITBUCKET_API_TOKEN env vars, and note that app passwords are deprecated.",
+      "files": []
     }
   ]
 }

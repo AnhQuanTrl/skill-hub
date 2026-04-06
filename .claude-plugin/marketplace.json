@@ -8,8 +8,15 @@
   "plugins": [
     {
       "name": "bitbucket",
-      "description": "Interact with Bitbucket Cloud via its REST API v2.0. Covers PR management, code review, repo operations, pipelines, and branch workflows.",
+      "description": "Interact with Bitbucket Cloud via its REST API v2.0. Covers PR management, repo operations, pipelines, and branch workflows.",
       "source": "./bitbucket",
+      "version": "0.1.0",
+      "category": "development"
+    },
+    {
+      "name": "dev-workflow",
+      "description": "Development workflow skills — code review, debugging, and other practices.",
+      "source": "./dev-workflow",
       "version": "0.1.0",
       "category": "development"
     }
