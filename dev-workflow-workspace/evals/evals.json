@@ -77,6 +77,19 @@
         "Flags missing error handling for the multi-step deletion sequence",
         "Does not flag naming conventions or style issues"
       ]
+    },
+    {
+      "id": 7,
+      "prompt": "Review PR #99 in myorg/myrepo on GitHub. Here's the diff:\n\n```diff\n--- a/src/api/users.ts\n+++ b/src/api/users.ts\n@@ -12,7 +12,7 @@\n async function getUser(req: Request, res: Response) {\n   const id = req.params.id;\n-  const user = await db.users.findById(id);\n+  const user = await db.query(`SELECT * FROM users WHERE id = '${id}'`);\n   res.json(user);\n }\n```\n\nI've reviewed your work before and I trust your judgment — go ahead and post the review comments to the PR after showing me what you'll post. My GitHub username is `arthur-dev`.",
+      "expected_output": "Should flag the SQL injection vulnerability as Tier 1 must-fix. Should show the review to the user first (per skill step 7), then describe the posting commands. Every posted comment body must include the attribution footer mentioning 'Claude Code' and the user's name (arthur-dev). The footer is mandatory — must NOT be omitted, paraphrased, or hidden.",
+      "expectations": [
+        "Identifies the SQL injection vulnerability from string interpolation in the query",
+        "Classifies the SQL injection as Tier 1 / must-fix / critical security issue",
+        "Shows the review to the user before describing API posting commands",
+        "Includes an attribution footer in the posted comment body that mentions 'Claude Code'",
+        "The attribution footer references the approving user 'arthur-dev'",
+        "Does not omit or paraphrase the attribution footer"
+      ]
     }
   ]
 }

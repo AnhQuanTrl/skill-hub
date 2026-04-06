@@ -113,8 +113,9 @@ Expanded examples and edge cases for each review tier. The tiers themselves are 
 When unsure, run through these questions:
 
 1. **Is this introduced by this PR?** If no → don't flag (pre-existing).
-2. **Would a senior engineer on this team flag this?** If no → probably a nitpick.
-3. **Can I describe the specific fix?** If no → reconsider.
-4. **Would this cause a bug, outage, or security issue in production?** If yes → Tier 1.
-5. **Would this make the next person's job harder?** If yes → Tier 2.
-6. **Is this just a preference?** If yes → don't flag or Tier 3 at most.
+2. **Would a senior engineer on this team flag this?** If no → probably a nitpick → don't flag.
+3. **Can I describe the specific fix and the concrete problem it prevents?** If no → don't flag.
+4. **Is my justification "harmless but…", "minor cleanup", "consider…", "adds noise"?** If yes → don't flag. These words are a tell that you're nitpicking.
+5. **Would this cause a bug, outage, or security issue in production?** If yes → Tier 1.
+6. **Would this make the next person's job harder in a concrete way?** If yes → Tier 2.
+7. **Is it just a preference or a style call?** → don't flag. Tier 3 is for substantive non-blocking issues (confusing naming, overcomplicated code), not preferences.
