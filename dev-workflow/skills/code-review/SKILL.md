@@ -10,7 +10,7 @@ description: Review pull request code changes or local diffs. Triggers on "revie
 - **Review the change, not the codebase.** Only flag issues introduced or worsened by this diff. Pre-existing problems are out of scope.
 - **Quality over quantity.** 3 real issues beat 15 nitpicks. A noisy review gets ignored.
 - **Be specific and actionable.** Every finding needs: what's wrong, why it matters, what to do instead.
-- **Assume competence.** The author probably had a reason. If something looks odd, check context (`git blame`, full file) before flagging.
+- **Independent judgment.** Authors are usually right but have blind spots, especially in fresh code. A comment explaining a workaround documents intent — it doesn't make the underlying risk go away. Don't defer reflexively; review exists to catch what the author missed.
 - **Filter before reporting.** If you're not confident an issue is real, don't report it. False positives destroy trust.
 
 ## Workflow
@@ -35,6 +35,8 @@ Build the aspect list from:
 - The tier categories in `references/review-criteria.md` (security, correctness, error handling, tests, etc.)
 - Project rules from `CLAUDE.md` and `.claude/rules/` (accessibility, performance budgets, type-safety conventions, etc.)
 - PR-specific signals from step 2 (e.g., touches database migrations → propose a "schema/migration" aspect; touches auth → propose a "security & authorization" aspect)
+
+**Default baseline when no PR-specific signals stand out:** security, correctness, error handling, **performance**, **type safety**, **incomplete changes (including dead code)**, and test coverage. Always include these as a starting point — only remove an aspect if the user says it's not relevant.
 
 Present the list and ask for confirmation or adjustment. Example:
 
@@ -74,11 +76,13 @@ The tiers below are for **classifying and filtering** what you found, not for ge
 **Filter first.** For each candidate finding, check whether it should be dropped before you even think about severity:
 
 1. **Is this real?** Read full file context if the diff is ambiguous. Is it pre-existing? → drop.
-2. **Is this intentional?** Could the author have done it on purpose? Check the PR description and related code. → drop if likely intentional.
-3. **Does it match anything in [What NOT to Flag](#what-not-to-flag)?** → drop.
-4. **Is your justification "harmless but worth mentioning", "minor", "noise", "consider", "cleanup"?** → drop. These are nitpick words. If you can't say it would actually cause a problem, don't flag it.
-5. **Is this actionable?** Can you describe a specific fix? If not → drop.
-6. **Is your confidence low?** → drop.
+2. **Does it match anything in [What NOT to Flag](#what-not-to-flag)?** → drop.
+3. **Is your justification "harmless but worth mentioning", "minor", "noise", "consider", "cleanup"?** → drop. These are nitpick words. If you can't say it would actually cause a problem, don't flag it.
+4. **Is this actionable?** Can you describe a specific fix? If not → drop.
+5. **Is your confidence low?** → **verify first**, don't drop. Read the relevant source. Apply known framework priors (e.g., "values returned from React hooks rebuild on every render unless explicitly memoized"; "type assertions on third-party API return values bypass static checking"). Only drop if the concern remains genuinely speculative *after* verification — not because you didn't bother to check.
+6. **Could you defend this finding with concrete evidence?** A specific failure mode, runtime scenario, or verifiable claim — *not* "the author would push back." Pushback from the author is normal; that's review working correctly. If you can defend it → keep, regardless of how the author would react. If you can't → verify or drop.
+
+**Note:** "Is this intentional?" is **not** a filter rule. Authors intentionally do risky things all the time. A comment explaining a workaround is documentation of a risk, not mitigation of it — the risk is still real and the finding still stands.
 
 **Then classify** what survives. Use [Severity Tiers](#severity-tiers) to assign must-fix, should-fix, or suggestion. Tier 3 is **not a dumping ground for nitpicks** — it's reserved for substantive issues like genuinely confusing naming or obviously overcomplicated code that don't rise to blocking. If a finding only deserves to exist as Tier 3 because nothing else fits, it probably should have been dropped at the filter step.
 
@@ -106,7 +110,7 @@ Issues a senior engineer would always flag: correctness errors (logic bugs, wron
 
 ### Tier 2 — should-fix (flag, may not block alone)
 
-Error handling gaps (silent failures, swallowed errors, missing propagation), incomplete changes (partial refactors, dead code, untracked TODOs), missing test coverage for new code paths or edge cases visible in the diff.
+Error handling gaps (silent failures, swallowed errors, missing propagation), **type safety bypasses** (`as any`, `as unknown as`, `// @ts-ignore`, Python `cast()` / `Any` in public signatures — type bypasses are load-bearing runtime assertions with zero enforcement), **performance regressions on hot paths** (defeated memoization, O(n²) over user input, blocking the main thread, N+1 queries on request paths), incomplete changes (partial refactors, **dead code left behind by the change** — functions/imports/branches no longer reachable, unused exports introduced by this PR — untracked TODOs), missing test coverage for new code paths or edge cases visible in the diff.
 
 ### Tier 3 — suggestion (never block)
 

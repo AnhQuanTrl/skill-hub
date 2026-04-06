@@ -90,6 +90,44 @@
         "The attribution footer references the approving user 'arthur-dev'",
         "Does not omit or paraphrase the attribution footer"
       ]
+    },
+    {
+      "id": 8,
+      "prompt": "Review this PR:\n\n```diff\n--- a/src/hooks/useChatStream.ts\n+++ b/src/hooks/useChatStream.ts\n@@ -45,7 +45,12 @@\n export function useChatStream(opts: ChatStreamOptions) {\n   const streamResult = useStream(opts);\n \n-  return streamResult;\n+  // The SDK doesn't export the type for getSubagentsByMessage — it's typed\n+  // on the @internal AnyStreamOptions interface. We use a type assertion to\n+  // pass it through. See https://github.com/sdk-vendor/sdk/issues/4521.\n+  return streamResult as unknown as typeof streamResult & {\n+    getSubagentsByMessage: (msgId: string) => Subagent[];\n+  };\n }\n```\n\nPR title: 'Expose getSubagentsByMessage from useChatStream'",
+      "expected_output": "Should flag the `as unknown as` cast as a Tier 2 type-safety issue. Should explicitly note that the author's comment is documentation of the risk, not mitigation — the cast still has zero static enforcement, so if the SDK renames or removes `getSubagentsByMessage`, this breaks silently at runtime. Should NOT drop the finding because the author left a comment explaining it. Should recommend a narrow named wrapper interface to localize the unsafety to one documented place.",
+      "expectations": [
+        "Flags the `as unknown as` cast as a type-safety issue (not just a style suggestion)",
+        "Classifies it as Tier 2 should-fix",
+        "Explicitly explains that the author's comment is documentation, not mitigation — the runtime risk is unchanged",
+        "Notes the failure mode: if the SDK renames or removes the field, the cast lies and the code breaks at runtime with no compile error",
+        "Does NOT drop the finding because the author justified the workaround in a comment",
+        "Recommends a concrete mitigation — either a type-level fix (narrow named wrapper interface, module augmentation) or a runtime safeguard (runtime guard / shape check, SDK version pinning, integration test that exercises the cast)"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Review this PR:\n\n```diff\n--- a/src/components/ChatScreen.tsx\n+++ b/src/components/ChatScreen.tsx\n@@ -22,7 +22,12 @@\n export function ChatScreen({ messages, items }: Props) {\n   return (\n     <div>\n-      <MessageList messages={messages} />\n+      <MessageList\n+        messages={messages}\n+        getItem={(id) => items.find(i => i.id === id)}\n+      />\n     </div>\n   );\n }\n```\n\nFor context: `MessageList` renders during a streaming chat (re-renders on every stream tick) and internally maps each message through `React.memo(MessageItem)`. `ChatScreen`'s parent re-renders on every stream update.\n\nPR title: 'Pass item lookup to MessageList'",
+      "expected_output": "Should flag the inline arrow function as a Tier 2 performance issue: a new function reference is created on every render of ChatScreen, which defeats `React.memo(MessageItem)` and causes every message in the list to re-render on every stream tick. Should NOT drop this with 'I haven't verified the SDK's behavior' — the agent should apply the prior that React function-prop literals are unstable references by default. Should recommend `useCallback` (with `items` as a dependency) or hoisting the lookup into `MessageList` itself.",
+      "expectations": [
+        "Identifies that `getItem={(id) => ...}` creates a new function reference on every render",
+        "Explains that this defeats `React.memo(MessageItem)` and causes every list item to re-render",
+        "Recognizes the streaming hot path makes the impact user-visible (not a micro-optimization)",
+        "Classifies as Tier 2 (performance regression on a hot path), not Tier 3 / nitpick",
+        "Does NOT drop under low-confidence rationale — verifies or applies the React prior",
+        "Recommends `useCallback` (with `items` dependency) or hoisting the lookup"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Review this PR:\n\n```diff\n--- a/src/api/handlers.ts\n+++ b/src/api/handlers.ts\n@@ -10,7 +10,7 @@\n import { Request, Response } from 'express';\n-import { formatLegacyResponse, formatModernResponse } from '../utils/format';\n+import { formatModernResponse } from '../utils/format';\n \n export async function getOrders(req: Request, res: Response) {\n   const orders = await db.orders.findAll();\n-  if (req.headers['x-api-version'] === 'v1') {\n-    return res.json(formatLegacyResponse(orders));\n-  }\n   return res.json(formatModernResponse(orders));\n }\n```\n\n```diff\n--- a/src/utils/format.ts\n+++ b/src/utils/format.ts\n@@ -1,6 +1,11 @@\n+export function formatLegacyResponse(orders: Order[]) {\n+  return orders.map(o => ({ ...o, legacy: true }));\n+}\n+\n export function formatModernResponse(orders: Order[]) {\n   return orders.map(o => ({ ...o, version: 'v2' }));\n }\n```\n\nPR title: 'Drop v1 API support from getOrders'",
+      "expected_output": "Should flag `formatLegacyResponse` as dead code introduced (or now made dead) by this PR. The handlers.ts diff removes the only call site of `formatLegacyResponse`, but the function is still exported from format.ts (and the diff actually shows it being newly added there — likely a merge artifact, but either way it's now an unused export). Should classify as Tier 2 incomplete change / dead code. Should recommend removing the function or downgrading it to non-exported if there's a plausible future caller.",
+      "expectations": [
+        "Identifies that `formatLegacyResponse` is no longer referenced after the handlers.ts change",
+        "Notes that the function is still exported from format.ts despite having no callers",
+        "Classifies as Tier 2 dead code / incomplete change (not Tier 3 nitpick)",
+        "Recommends removing the unused function (or explains how to verify there are no other callers first)",
+        "Does not flag unrelated style or formatting issues"
+      ]
     }
   ]
 }

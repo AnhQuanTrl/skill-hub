@@ -56,16 +56,61 @@ Expanded examples and edge cases for each review tier. The tiers themselves are 
 - `catch` with a comment like `// expected when connection is closed` if genuinely expected
 - Error handling that matches an established pattern in the codebase
 
-### Incomplete Changes
+### Incomplete Changes (including dead code)
 
 **Flag:**
 - Renamed `getUserName()` to `getDisplayName()` but three callers still use the old name
 - Feature flag added but never checked in the code path it gates
 - Migration file added but schema docs not updated
+- Functions, imports, or branches reachable only by callers this PR removes
+- Commented-out code blocks introduced by the change
+- Unused exports introduced by this PR
+- Conditionally-dead branches (`if (false)`, code after an early return that always fires)
+- Variables assigned but never read
 
 **Don't flag:**
-- Dead code that exists in the base branch and isn't touched by this PR
+- Dead code that exists in the base branch and isn't touched by this PR (pre-existing)
 - A TODO with an issue link (tracked follow-up is fine)
+- Unused-but-exported helpers in a library where unused-export is the established norm
+- Code reachable only by tests that this PR doesn't touch
+
+### Performance
+
+The bar: would a user notice on realistic input?
+
+**Flag:**
+- Defeated `React.memo` from unstable references passed to memoized children (new function/object literal as a prop on every render)
+- O(n²) loops over user-controlled or request-sized data
+- Blocking the main thread on UI handlers (synchronous parsing of large JSON, sync `fs` in Node request paths)
+- N+1 queries on a request path
+- Unbounded `useEffect` dependencies that re-run a network call on every render
+
+**Don't flag:**
+- Micro-optimizations on cold paths (one-shot config parsing, build scripts)
+- Optimization opportunities without a concrete user-visible impact
+- Speculative "this could be slow if..." without evidence the input grows
+
+### Type Safety
+
+**Key principle:** type bypasses are load-bearing assertions about runtime behavior with **zero enforcement**. An author comment explaining a bypass is *documentation* of a risk, not *mitigation* of it — the underlying runtime risk is unchanged.
+
+**Flag (TypeScript):**
+- `as any`, `as unknown as X` to bypass a real type error
+- `// @ts-ignore` / `// @ts-expect-error` without a tracking issue link or justifying comment
+- Non-null assertion (`!`) on values that can genuinely be null
+- `any` parameters or returns in non-test code
+- Type assertions on third-party API return values where the cast is runtime-only and the SDK could rename the field (the code will compile but break at runtime if the field changes)
+
+**Flag (Python):**
+- `cast()` to bypass a type error rather than fix it
+- `# type: ignore` without a justifying comment
+- `Any` in public function signatures
+- Missing return type annotations on public functions
+
+**Don't flag:**
+- `as` casts in tests where the test setup guarantees the type
+- `any` at a genuinely-untyped third-party integration boundary, with a comment explaining the boundary
+- Type assertions in generated code
 
 ### Missing Test Coverage
 
@@ -116,6 +161,7 @@ When unsure, run through these questions:
 2. **Would a senior engineer on this team flag this?** If no → probably a nitpick → don't flag.
 3. **Can I describe the specific fix and the concrete problem it prevents?** If no → don't flag.
 4. **Is my justification "harmless but…", "minor cleanup", "consider…", "adds noise"?** If yes → don't flag. These words are a tell that you're nitpicking.
-5. **Would this cause a bug, outage, or security issue in production?** If yes → Tier 1.
-6. **Would this make the next person's job harder in a concrete way?** If yes → Tier 2.
-7. **Is it just a preference or a style call?** → don't flag. Tier 3 is for substantive non-blocking issues (confusing naming, overcomplicated code), not preferences.
+5. **Does this bypass type checking, regress performance on a hot path, or leave dead code in the diff?** If yes → flag. The author's explanation, if any, is documentation, not mitigation.
+6. **Would this cause a bug, outage, or security issue in production?** If yes → Tier 1.
+7. **Would this make the next person's job harder in a concrete way?** If yes → Tier 2.
+8. **Is it just a preference or a style call?** → don't flag. Tier 3 is for substantive non-blocking issues (confusing naming, overcomplicated code), not preferences.
