@@ -1,155 +1,178 @@
 ---
 name: code-review
-description: Review pull request code changes or local diffs. Triggers on "review PR", "review my changes", "code review", "check the diff", "look at the changes". Works with GitHub (gh CLI) and Bitbucket (REST API). Uses local git for reading diffs — only calls platform APIs for posting comments and approvals.
+user_invocable: true
+description: >
+  Run a comprehensive code review of a pull request, branch, or local diff using
+  specialized review agents that each focus on a different engineering concern
+  (correctness, security, reliability, tests, design, type design). Use this skill
+  when the user asks to "review a PR", "review my changes", "check this before I
+  commit", "review the diff", or any variation. Accepts a PR number/URL, a branch
+  name, or defaults to the current branch vs main.
 ---
 
 # Code Review
 
-## Philosophy
+Orchestrates a multi-perspective review by dispatching specialized agents in parallel and aggregating their reports.
 
-- **Review the change, not the codebase.** Only flag issues introduced or worsened by this diff. Pre-existing problems are out of scope.
-- **Quality over quantity.** 3 real issues beat 15 nitpicks. A noisy review gets ignored.
-- **Be specific and actionable.** Every finding needs: what's wrong, why it matters, what to do instead.
-- **Independent judgment.** Authors are usually right but have blind spots, especially in fresh code. A comment explaining a workaround documents intent — it doesn't make the underlying risk go away. Don't defer reflexively; review exists to catch what the author missed.
-- **Filter before reporting.** If you're not confident an issue is real, don't report it. False positives destroy trust.
+## Review Agents
+
+| Agent | Concern | Scoring |
+|---|---|---|
+| `review-correctness` | Requirements compliance, logic bugs, contract violations | 0–100 confidence, report ≥ 80 |
+| `review-security` | AuthN/authZ, data exposure, input validation | CRITICAL / HIGH / MEDIUM |
+| `review-reliability` | Error handling, silent failures, data integrity | CRITICAL / HIGH / MEDIUM + Silent Failure Audit |
+| `review-tests` | Test coverage and quality | 1–10 criticality, report ≥ 7 |
+| `review-design` | Architecture, conventions, clarity | 3-dim 1–10 ratings + per-finding 0–100 |
+| `review-types` | Type design (invariants, encapsulation, usefulness) | 4-dim 1–10 ratings per type |
+
+## Scope Rules
+
+Apply to every agent and to the orchestrator's aggregation. Things on this list are **dropped, not surfaced** — they're out of scope, not low-signal:
+
+- **Style and formatting** — linters handle this
+- **Pre-existing issues that are already acknowledged** — tracked in a TODO/issue, called out in a code comment, or covered by a project rule. Unacknowledged pre-existing issues are fair to surface — a PR review is a useful moment to catch them; flag them as such (clearly attributed to the existing code, not the diff) rather than blocking the PR on them.
+- **No-op or whitespace-only changes** — even if they "muddy git blame", they're harmless
+- **Speculative issues** without evidence (e.g., "might break if someone passes X" — only flag if X can actually happen)
+- **Missing features** — the PR does what it says; don't scope-creep
+- **Things project rules explicitly allow** — if `CLAUDE.md` or `.claude/rules/` says it's fine, it's fine
 
 ## Workflow
 
-### 1. Load criteria
+### 1. Gather the change set
 
-- Load `references/review-criteria.md` as baseline.
-- Load the project's `CLAUDE.md` and `.claude/rules/`.
-- **Project conventions override defaults on conflict, extend on new rules** — if the project says "we allow `any` in test files", that overrides the default type-safety rule for tests.
+Parse the user's request:
 
-### 2. Understand intent
+- **GitHub PR**: `gh pr view <num> --json number,title,headRefName,baseRefName,body,files` + `gh pr diff <num>`
+- **Branch**: `git fetch origin main` then `git diff origin/main...<branch>`
+- **Local changes**: `git diff HEAD` (fall back to `git diff origin/main...HEAD`)
+- **Commit range**: `git diff <range>`
 
-- Read the PR title and description.
-- Run `git diff --stat` to see scope — which areas are touched, how large is the change.
-- Don't read the full diff yet.
+Produce: a **file list** (with added/modified/deleted status) and the **raw diff**.
 
-### 3. Confirm review aspects with the user (always)
+### 2. Extract requirements context
 
-Before reading the diff or producing findings, **propose a list of review aspects and get user confirmation**. This applies to every review, regardless of PR size — the user knows their priorities better than you do, and confirming up front prevents wasted effort.
+If the change set is a PR, extract the linked issue or PRD:
 
-Build the aspect list from:
-- The tier categories in `references/review-criteria.md` (security, correctness, error handling, tests, etc.)
-- Project rules from `CLAUDE.md` and `.claude/rules/` (accessibility, performance budgets, type-safety conventions, etc.)
-- PR-specific signals from step 2 (e.g., touches database migrations → propose a "schema/migration" aspect; touches auth → propose a "security & authorization" aspect)
+- Check the PR body for issue references (`#28`, `Closes #28`, etc.)
+- If found, fetch the issue body: `gh issue view <num>`
+- Pass the requirements (acceptance criteria, expected behavior) to `review-correctness` so it can verify the implementation matches what was asked for
 
-**Default baseline when no PR-specific signals stand out:** security, correctness, error handling, **performance**, **type safety**, **incomplete changes (including dead code)**, and test coverage. Always include these as a starting point — only remove an aspect if the user says it's not relevant.
+If no linked issue/PRD, `review-correctness` still reviews logic and contracts but skips requirement compliance.
 
-Present the list and ask for confirmation or adjustment. Example:
+### 3. Confirm review aspects with the user
 
-> For this PR I'd like to review along these aspects:
-> 1. Security & authorization (touches auth middleware)
-> 2. Correctness & state — including partial-state risks
-> 3. Error handling & resilience
-> 4. Test coverage for new code paths
-> 5. Database migration backward-compat (project rule)
+Before dispatching, **decide which agents are actually relevant for this diff** and get user confirmation. Don't default to "fire everything" — running agents that have nothing meaningful to review wastes context and produces filler.
+
+Look at the diffstat (and skim file paths) and judge for each agent whether it has real work to do on *this* change. Be lean. A 10-line typo fix doesn't need 6 agents; a 5-line auth change might only need security. Use the agent table at the top of this file to remind yourself what each one cares about.
+
+Then present the proposed set with a one-line reason per agent, and ask for confirmation. Example for a small auth-related change:
+
+> For this PR (12 lines, touches `middleware/auth.ts`) I'd dispatch:
+> - review-security — auth middleware change, primary concern
+> - review-correctness — verify the new condition is right
 >
-> Want me to adjust this list, or proceed?
+> Skipping reliability / tests / design / types — nothing material for them in this diff. Sound good?
 
-The agreed aspects drive everything that follows: what you look for, how you classify findings, and (for large PRs) how you split parallel subagents.
+Or for a larger feature PR:
 
-### 4. Read the diff
+> For this PR (480 lines across 14 files, new `Image` entity + endpoints + tests) I'd dispatch:
+> - review-correctness, review-security, review-reliability, review-tests, review-design — full feature surface
+> - review-types — new entity + Zod schema
+>
+> Anything to add or skip?
 
-- Run `git diff` directly and read the output. Claude Code pages large tool outputs to disk automatically — no need to manually save unless you need to grep across the whole diff.
-- For ambiguous hunks, get surrounding context with `git show {hash}:path`.
-- Check tests last, after understanding the code changes.
+The agreed list drives step 4. **Project rules from `CLAUDE.md` and `.claude/rules/`** can also justify a custom emphasis (e.g., a project-mandated accessibility review) — fold those into the proposal.
 
-For very large PRs (~3000+ lines, or when you can't reason about the whole change in one pass), use parallel subagents — see [Parallel Review for Large PRs](#parallel-review-for-large-prs) below.
+### 4. Dispatch agents in parallel
 
-For exact git commands, platform detection, and posting comments, see `references/workflow.md`.
+Launch all confirmed agents **in one message** using the Agent tool. Each agent receives:
+- The file list and raw diff
+- Requirements context (for `review-correctness`, if available)
+- Instruction to read `CLAUDE.md` and `.claude/rules/` for codebase conventions
+- The **Scope Rules** above — agents must drop anything matching them
 
-### 5. Reason about what could go wrong
+### 5. Aggregate and report
 
-This is where findings come from — not from scanning a checklist. For each agreed aspect, ask:
+Parse each agent's structured report and produce a single consolidated output (format below).
 
-1. **What does this code do?** Understand the operations, data flow, and side effects.
-2. **What could go wrong in production?** Failure modes, edge cases, partial states. What happens if any step fails partway through? What assumptions does the code make about its inputs? What does a caller see when this fails?
-3. **What's the blast radius?** Auth, payments, and data mutations have higher stakes than logging or formatting.
+**If the review is long** (more than ~5 findings total, or the markdown wouldn't fit on one screen), **write it to a file** and show only a short summary + path in chat. Suggested location:
 
-The tiers below are for **classifying and filtering** what you found, not for generating findings.
+- `.claude/reviews/pr-<num>-review.md` for PR reviews
+- `.claude/reviews/branch-<name>-review.md` for branch reviews
 
-### 6. Filter, then classify
+The chat output for long reviews should contain: counts per severity, the top 3 critical findings, and the file path. The user opens the file in their editor to read the full report.
 
-**Filter first.** For each candidate finding, check whether it should be dropped before you even think about severity:
+For short reviews (≤ 5 findings), present the full output in chat directly.
 
-1. **Is this real?** Read full file context if the diff is ambiguous. Is it pre-existing? → drop.
-2. **Does it match anything in [What NOT to Flag](#what-not-to-flag)?** → drop.
-3. **Is your justification "harmless but worth mentioning", "minor", "noise", "consider", "cleanup"?** → drop. These are nitpick words. If you can't say it would actually cause a problem, don't flag it.
-4. **Is this actionable?** Can you describe a specific fix? If not → drop.
-5. **Is your confidence low?** → **verify first**, don't drop. Read the relevant source. Apply known framework priors (e.g., "values returned from React hooks rebuild on every render unless explicitly memoized"; "type assertions on third-party API return values bypass static checking"). Only drop if the concern remains genuinely speculative *after* verification — not because you didn't bother to check.
-6. **Could you defend this finding with concrete evidence?** A specific failure mode, runtime scenario, or verifiable claim — *not* "the author would push back." Pushback from the author is normal; that's review working correctly. If you can defend it → keep, regardless of how the author would react. If you can't → verify or drop.
+Output format:
 
-**Note:** "Is this intentional?" is **not** a filter rule. Authors intentionally do risky things all the time. A comment explaining a workaround is documentation of a risk, not mitigation of it — the risk is still real and the finding still stands.
+```markdown
+# PR Review: <title>
 
-**Then classify** what survives. Use [Severity Tiers](#severity-tiers) to assign must-fix, should-fix, or suggestion. Tier 3 is **not a dumping ground for nitpicks** — it's reserved for substantive issues like genuinely confusing naming or obviously overcomplicated code that don't rise to blocking. If a finding only deserves to exist as Tier 3 because nothing else fits, it probably should have been dropped at the filter step.
+**Change set**: <N files changed, +additions / -deletions>
+**Requirements**: <linked issue/PRD title, or "none linked">
+**Reviewers run**: <list>
 
-A review with zero comments is a valid review.
+---
 
-### 7. Present the review and get approval before posting
+## Ratings
 
-Use the structure in `references/output-format.md`.
+*From review-design:*
+- **Architecture & DDD adherence**: X/10 — <one-line justification>
+- **Convention compliance**: X/10 — <one-line justification>
+- **Clarity**: X/10 — <one-line justification>
 
-**For self-review:** Report findings directly to the user and offer to fix them locally. Done.
+*From review-types (if run), per type:*
+- **`TypeName`**: Encapsulation X/10, Invariant Strength X/10, Usefulness X/10, Enforcement X/10
 
-**For remote PRs:**
-1. **Show the full review to the user first.** Never post comments to a remote PR without explicit user approval — the user's name is on the comments and they need to vet them.
-2. **Ask the user to confirm.** Wait for approval (or edits) before any API call.
-3. **Post with attribution.** Every posted comment must include a footer attributing it to Claude Code with the approving user's identity. See `references/output-format.md` for the exact attribution format.
-4. Use the platform API commands in `references/workflow.md`.
+---
 
-## Severity Tiers
+## 🔴 Critical — must fix before merge
+- **[agent-name]** `file:line` — <issue> / *Fix:* <recommendation>
 
-Examples of common patterns, not an exhaustive checklist. Use judgment when something doesn't fit neatly.
+## 🟠 Important — should fix
+<same format>
 
-### Tier 1 — must-fix (block the PR)
+## 🟡 Suggestions
+<terse, one bullet each>
 
-Issues a senior engineer would always flag: correctness errors (logic bugs, wrong conditions, off-by-one, race conditions, incorrect state mutations), breakage (syntax/type errors, missing imports, broken callers after rename/removal), security (injection, hardcoded secrets, auth loosening, unsafe deserialization).
+## Silent Failure Audit
+<from review-reliability>
 
-### Tier 2 — should-fix (flag, may not block alone)
+## Strengths
+<3–5 bullets max>
 
-Error handling gaps (silent failures, swallowed errors, missing propagation), **type safety bypasses** (`as any`, `as unknown as`, `// @ts-ignore`, Python `cast()` / `Any` in public signatures — type bypasses are load-bearing runtime assertions with zero enforcement), **performance regressions on hot paths** (defeated memoization, O(n²) over user input, blocking the main thread, N+1 queries on request paths), incomplete changes (partial refactors, **dead code left behind by the change** — functions/imports/branches no longer reachable, unused exports introduced by this PR — untracked TODOs), missing test coverage for new code paths or edge cases visible in the diff.
+## Recommended action
+1. Fix N critical issues
+2. Address M important issues
+3. Consider K suggestions
+4. Re-run `/code-review` after fixes
+```
 
-### Tier 3 — suggestion (never block)
+## Posting Comments to the PR
 
-Genuinely confusing naming, misleading comments, obviously overcomplicated code where a simpler approach exists.
+When the user asks to post comments (e.g., "add comments to the PR", "post this review", "comment on the PR"):
 
-For expanded examples and edge cases, read `references/review-criteria.md`.
+1. **Show the full review to the user first.** If long, the file from step 5 is enough — summarize what's about to be posted (count per severity, files affected, agent attribution).
+2. **Get explicit approval before posting.** Wait for the user to confirm. Never auto-post.
+3. **Post with attribution.** Every comment ends with the attribution footer below.
 
-## What NOT to Flag
+See `references/pr-comments.md` for the per-finding posting format and the GitHub Reviews API commands.
 
-- **Style and formatting** — linters handle this
-- **Pre-existing issues** not introduced or worsened by this change
-- **No-op or whitespace-only changes** — even if they "add noise" or "muddy git blame", they're harmless. Don't flag.
-- **Speculative issues** — "might break if someone passes X" without evidence it can happen
-- **Nitpicks** — minor preferences a senior engineer wouldn't mention. If your reasoning starts with "harmless but…", "consider…", "minor cleanup…", "worth noting…" — it's a nitpick.
-- **Missing features** — the PR does what it says; don't scope-creep the review
-- **Things project rules explicitly allow** — if CLAUDE.md says it's fine, it's fine
+### Attribution footer
 
-## Parallel Review for Large PRs
+Every comment posted to a remote PR — inline comments, standalone reviews, approval/request-changes messages — **must end with**:
 
-For small and medium PRs, do the review yourself in a single pass against the agreed aspects.
+```
+---
+🤖 Drafted by Claude Code, reviewed and approved by @{username}
+```
 
-For large PRs (~3000+ lines, or when the diff is too big to reason about holistically), **dispatch one subagent per agreed aspect in parallel**. Reuse the aspect list confirmed in step 3 — don't re-derive it.
+Get `{username}` via `gh api user --jq .login`. The attribution is non-negotiable: it tells readers the comment was AI-drafted and human-approved before posting.
 
-Each subagent gets:
-- The full diff (or diffstat + instructions to fetch it)
-- The PR title and description
-- Its specific aspect, with the relevant criteria from `references/review-criteria.md` and project rules
-- An instruction to apply the same philosophy: review the change, quality over quantity, filter before reporting
+## Orchestrator Rules
 
-After all subagents return, the main agent:
-- Collects findings from each
-- Deduplicates (the same issue may surface from multiple aspects)
-- Classifies by severity using the tiers
-- Presents a unified review in the standard output format
-
-For the exact subagent dispatch pattern, see `references/workflow.md`.
-
-## Reference Files
-
-- **`references/review-criteria.md`** — Expanded examples and edge cases for each review tier. Consult when unsure how to classify a finding.
-- **`references/output-format.md`** — The structure your final review should follow (summary, findings by severity, recommendation). Consult before presenting the review.
-- **`references/workflow.md`** — Git commands for fetching diffs, platform detection (GitHub/Bitbucket), API calls for posting comments and approvals, and the subagent dispatch pattern for parallel review.
+- Route and aggregate only — never duplicate an agent's analysis.
+- Attribute every finding to its source agent.
+- If an agent fails or times out, report which one and continue.
+- If the diff is empty, report that and stop.
