@@ -73,7 +73,7 @@ No authorization checks on image endpoints. Any authenticated user can upload to
 
 A design rating comment:
 ```
-**[Design]** **🟠 Important** — Architecture & DDD adherence: 7/10
+**[Design]** **🟠 Important** — Architecture adherence: 7/10
 
 Route design is inconsistent: POST uses `/brands/:brandId/uploads/images`, GET uses `/images/:imageId`, DELETE uses `/brands/:brandId/images/:imageId`. This makes the API surface harder to reason about.
 

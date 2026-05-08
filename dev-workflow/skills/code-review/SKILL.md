@@ -118,7 +118,7 @@ Output format:
 ## Ratings
 
 *From review-design:*
-- **Architecture & DDD adherence**: X/10 — <one-line justification>
+- **Architecture adherence**: X/10 — <one-line justification>
 - **Convention compliance**: X/10 — <one-line justification>
 - **Clarity**: X/10 — <one-line justification>
 
