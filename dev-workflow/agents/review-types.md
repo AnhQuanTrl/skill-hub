@@ -25,7 +25,7 @@ description: >
   Schema changes + new branded types are the core trigger for type design review.
   </commentary>
   </example>
-model: inherit
+model: sonnet
 color: pink
 ---
 

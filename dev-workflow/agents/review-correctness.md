@@ -23,7 +23,7 @@ description: >
   Business logic changes warrant adversarial logic review.
   </commentary>
   </example>
-model: inherit
+model: sonnet
 color: red
 ---
 

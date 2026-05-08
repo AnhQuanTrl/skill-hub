@@ -23,7 +23,7 @@ description: >
   File upload features have a large attack surface.
   </commentary>
   </example>
-model: inherit
+model: sonnet
 color: orange
 ---
 

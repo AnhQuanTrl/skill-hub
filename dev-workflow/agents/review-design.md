@@ -24,7 +24,7 @@ description: >
   Cross-module calls are a critical design concern.
   </commentary>
   </example>
-model: inherit
+model: sonnet
 color: blue
 ---
 

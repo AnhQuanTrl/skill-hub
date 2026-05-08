@@ -24,7 +24,7 @@ description: >
   Production code changes without corresponding tests are the most critical gap.
   </commentary>
   </example>
-model: inherit
+model: sonnet
 color: cyan
 ---
 

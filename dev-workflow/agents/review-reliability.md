@@ -24,7 +24,7 @@ description: >
   Async handlers have specific reliability concerns.
   </commentary>
   </example>
-model: inherit
+model: sonnet
 color: yellow
 ---
 
